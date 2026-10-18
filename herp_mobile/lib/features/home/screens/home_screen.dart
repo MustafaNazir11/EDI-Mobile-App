@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../incidents/screens/report_incident_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -58,8 +59,11 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                           const SizedBox(height: 18),
                           _EmergencyActionCard(
-                            onReportTap: () => _showMessage(
-                              'Incident reporting will be available in the next step.',
+                            onReportTap: () => Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (context) =>
+                                    const ReportIncidentScreen(),
+                              ),
                             ),
                           ),
                           const SizedBox(height: 28),
@@ -70,7 +74,13 @@ class _HomeScreenState extends State<HomeScreen> {
                           const SizedBox(height: 14),
                           _EmergencyCategoryGrid(
                             onCategoryTap: (category) =>
-                                _showMessage('$category selected.'),
+                                Navigator.of(context).push(
+                                  MaterialPageRoute<void>(
+                                    builder: (context) => ReportIncidentScreen(
+                                      initialCategory: category,
+                                    ),
+                                  ),
+                                ),
                           ),
                           const SizedBox(height: 28),
                           _SectionHeading(

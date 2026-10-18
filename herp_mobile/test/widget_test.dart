@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:herp_mobile/main.dart';
 
 void main() {
-  testWidgets('Citizen home displays sections and report feedback', (
+  testWidgets('Citizen home opens the incident reporting screen', (
     tester,
   ) async {
     await tester.pumpWidget(const MyApp());
@@ -18,11 +18,9 @@ void main() {
     await tester.drag(find.byType(CustomScrollView), const Offset(0, 1000));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Report Emergency'));
-    await tester.pump();
+    await tester.pumpAndSettle();
 
-    expect(
-      find.text('Incident reporting will be available in the next step.'),
-      findsOneWidget,
-    );
+    expect(find.text('Report Emergency'), findsWidgets);
+    expect(find.text('Submit Emergency Report'), findsOneWidget);
   });
 }
