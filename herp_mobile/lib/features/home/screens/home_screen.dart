@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../ble/screens/nearby_devices_screen.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../incidents/screens/report_incident_screen.dart';
 
@@ -65,6 +66,18 @@ class _HomeScreenState extends State<HomeScreen> {
                                     const ReportIncidentScreen(),
                               ),
                             ),
+                          ),
+                          const SizedBox(height: 16),
+                          OutlinedButton.icon(
+                            onPressed: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) => const NearbyDevicesScreen(),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.bluetooth_searching),
+                            label: const Text('Nearby HERP Devices'),
                           ),
                           const SizedBox(height: 28),
                           _SectionHeading(
