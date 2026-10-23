@@ -45,8 +45,7 @@ class BleScanService {
     }
 
     await FlutterBluePlus.startScan(
-      withServices: [Guid(BleConstants.herpServiceUuid)],
-      timeout: const Duration(seconds: 15),
+      withServices: [Guid(BleConstants.herpServiceUuid)]
     );
   }
 

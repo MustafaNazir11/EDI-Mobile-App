@@ -1,9 +1,14 @@
+import 'dart:typed_data';
+
 import 'package:flutter_ble_peripheral/flutter_ble_peripheral.dart';
 
 import 'ble_constants.dart';
 
 class BleAdvertiseService {
   final FlutterBlePeripheral _peripheral = FlutterBlePeripheral();
+
+  /// Incoming SOS data written by a connected phone.
+  Stream<Uint8List> get receivedData => _peripheral.onDataReceived;
 
   Future<String> startAdvertising() async {
     final supported = await _peripheral.isSupported;
@@ -29,9 +34,15 @@ class BleAdvertiseService {
       advertiseData: AdvertiseDataCore(
         serviceUuid: BleConstants.herpServiceUuid,
       ),
+      gattServer: const GattServerSettings(),
     );
 
     return 'Advertising result: $state';
+  }
+
+  /// Send data to a connected central device.
+  Future<void> sendData(Uint8List data) async {
+    await _peripheral.sendData(data);
   }
 
   Future<void> stopAdvertising() async {
