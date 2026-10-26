@@ -4,8 +4,8 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
-
 import '../../../core/location/location_service.dart';
+import '../../sos/models/sos_message.dart';
 import '../../../core/ble/ble_connection_service.dart';
 import '../../../core/ble/ble_advertise_service.dart';
 import '../../../core/ble/ble_scan_service.dart';
@@ -22,6 +22,11 @@ class _NearbyDevicesScreenState extends State<NearbyDevicesScreen> {
   final BleAdvertiseService _advertiseService = BleAdvertiseService();
   final BleConnectionService _connectionService = BleConnectionService();
   final LocationService _locationService = LocationService();
+  final Set<String> _handledSosIds = {};
+  final String _relayDeviceId =
+    'HERP-RELAY-${DateTime.now().microsecondsSinceEpoch}';
+
+final Set<String> _relayingSosIds = {};
 
   StreamSubscription<Uint8List>? _receivedDataSubscription;
   String? _receivedMessage;
@@ -70,15 +75,80 @@ class _NearbyDevicesScreenState extends State<NearbyDevicesScreen> {
     });
 
     _receivedDataSubscription = _advertiseService.receivedData.listen((data) {
-      if (!mounted) return;
+  _handleIncomingSos(data);
+});
 
-      setState(() {
-        _receivedMessage = utf8.decode(data, allowMalformed: true);
-      });
+    _startRelayMode();
+  }
+
+  Future<void> _handleIncomingSos(Uint8List data) async {
+  try {
+    final rawMessage = utf8.decode(data);
+    final sos = SosMessage.decode(rawMessage);
+
+    // Handle each SOS only once during this app session.
+    if (!_handledSosIds.add(sos.id)) return;
+
+    if (!mounted) return;
+
+    setState(() {
+      _receivedMessage =
+          'SOS received!\n'
+          'ID: ${sos.id}\n'
+          'Origin: ${sos.originDeviceId}\n'
+          'Latitude: ${sos.latitude ?? "Unavailable"}\n'
+          'Longitude: ${sos.longitude ?? "Unavailable"}';
     });
 
-    _startScan();
+    debugPrint('HERP received SOS: ${sos.id}');
+
+    // Forward without waiting for the UI or requiring a button tap.
+    await _forwardSos(sos);
+  } catch (e) {
+    debugPrint('HERP received invalid SOS data: $e');
   }
+}
+
+Future<void> _forwardSos(SosMessage sos) async {
+  if (!_relayingSosIds.add(sos.id)) return;
+
+  try {
+    // Prevent this relay from appearing twice in the route.
+    if (sos.hasVisited(_relayDeviceId)) return;
+
+    if (!sos.canForward) {
+      debugPrint('HERP: maximum SOS hops reached: ${sos.id}');
+      return;
+    }
+
+    final forwardedSos = sos.forwardedBy(_relayDeviceId);
+
+    // Copy the list because scan results may change while sending.
+    final nearbyDevices = List<ScanResult>.from(_devices.values);
+
+    for (final result in nearbyDevices) {
+      if (!mounted) break;
+
+      final deviceId = result.device.remoteId.str;
+
+      // Don't send back to a device whose ID is already in the route.
+      if (forwardedSos.hasVisited(deviceId)) continue;
+
+      final status = await _connectionService.sendSosMessage(
+        result.device,
+        forwardedSos,
+      );
+
+      debugPrint(
+        'HERP relay ${sos.id} -> $deviceId: $status',
+      );
+    }
+  } catch (e) {
+    debugPrint('HERP forwarding failed for ${sos.id}: $e');
+  } finally {
+    _relayingSosIds.remove(sos.id);
+  }
+}
 
   Future<void> _startAdvertising() async {
     setState(() {
@@ -158,35 +228,58 @@ class _NearbyDevicesScreenState extends State<NearbyDevicesScreen> {
     }
   }
 
-  Future<void> _sendTestMessage(ScanResult result) async {
-    final deviceId = result.device.remoteId.str;
+  Future<void> _startRelayMode() async {
+  await _startAdvertising();
+
+  if (!mounted) return;
+
+  await _startScan();
+}
+
+Future<void> _sendTestMessage(ScanResult result) async {
+  final deviceId = result.device.remoteId.str;
+
+  setState(() {
+    _sendingDeviceId = deviceId;
+    _transferStatus = null;
+  });
+
+  try {
+    final location = await _locationService.getCurrentLocation();
+
+    final sos = SosMessage(
+      id: '${DateTime.now().millisecondsSinceEpoch}-$deviceId',
+      originDeviceId: 'HERP-$deviceId',
+      createdAt: DateTime.now().toUtc(),
+      latitude: location.latitude,
+      longitude: location.longitude,
+    );
+
+    _handledSosIds.add(sos.id);
+
+
+    final message = await _connectionService.sendSosMessage(
+      result.device,
+      sos,
+    );
+
+    if (!mounted) return;
 
     setState(() {
-      _sendingDeviceId = deviceId;
-      _transferStatus = null;
+      _transferStatus = '$deviceId: $message';
     });
+  } catch (error) {
+    if (!mounted) return;
 
-    try {
-      final message = await _connectionService.sendTestMessage(result.device);
-
-      if (!mounted) return;
-
-      setState(() {
-        _transferStatus = '$deviceId: $message';
-      });
-    } catch (error) {
-      if (!mounted) return;
-
-      setState(() {
-        _transferStatus = 'Transfer failed: $error';
-      });
-    } finally {
-      if (mounted) {
-        setState(() => _sendingDeviceId = null);
-      }
+    setState(() {
+      _transferStatus = 'SOS transfer failed: $error';
+    });
+  } finally {
+    if (mounted) {
+      setState(() => _sendingDeviceId = null);
     }
   }
-
+}
   Future<void> _getLocation() async {
     setState(() {
       _gettingLocation = true;

@@ -1,41 +1,64 @@
+
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:flutter_ble_peripheral/flutter_ble_peripheral.dart';
 
 import 'ble_constants.dart';
+import '../../features/sos/models/sos_message.dart';
 
 class BleConnectionService {
-  Future<String> sendTestMessage(BluetoothDevice device) async {
-    try {
-      // Connect to the advertising phone.
-      await device.connect(license: License.nonprofit);
+  
+Future<String> sendSosMessage(
+  BluetoothDevice device,
+  SosMessage sos,
+) async {
+  var stage = 'connecting';
 
-      // Discover its GATT services.
-      final services = await device.discoverServices();
+  try {
+    await device
+        .connect(
+          license: License.nonprofit,
+          timeout: const Duration(seconds: 20),
+        )
+        .timeout(const Duration(seconds: 25));
 
-      // Find the HERP service.
-      final service = services.firstWhere(
-        (service) => service.uuid == Guid(BleConstants.herpServiceUuid),
-        orElse: () =>
-            throw Exception('HERP service not found on the other phone.'),
-      );
+    stage = 'discovering HERP service';
 
-      // Find the RX characteristic used to receive data.
-      final rxCharacteristic = service.characteristics.firstWhere(
-        (characteristic) =>
-            characteristic.uuid == Guid(defaultRxCharacteristicUuid),
-        orElse: () => throw Exception('HERP receive characteristic not found.'),
-      );
+    final services = await device
+        .discoverServices()
+        .timeout(const Duration(seconds: 15));
 
-      // Send a small test message over BLE.
-      final message = utf8.encode('HERP_TEST:Hello from the other phone!');
+    final service = services.firstWhere(
+      (s) => s.uuid == Guid(BleConstants.herpServiceUuid),
+      orElse: () => throw Exception(
+        'HERP service not found on the receiving phone.',
+      ),
+    );
 
-      await rxCharacteristic.write(message);
+    stage = 'finding receive characteristic';
 
-      return 'Test message sent successfully.';
-    } catch (e) {
-      return 'BLE transfer failed: $e';
-    }
+    final rxCharacteristic = service.characteristics.firstWhere(
+      (c) => c.uuid == Guid(defaultRxCharacteristicUuid),
+      orElse: () => throw Exception(
+        'HERP receive characteristic not found.',
+      ),
+    );
+
+    stage = 'writing SOS';
+
+    final bytes = Uint8List.fromList(
+      utf8.encode(sos.encode()),
+    );
+
+    await rxCharacteristic
+        .write(bytes)
+        .timeout(const Duration(seconds: 15));
+
+    return 'SOS write completed. Remote receipt is not confirmed.';
+  } catch (e) {
+    return 'SOS failed while $stage: $e';
   }
+}
 }
