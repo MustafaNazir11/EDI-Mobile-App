@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_ble_peripheral/flutter_ble_peripheral.dart';
@@ -31,9 +32,21 @@ class BleAdvertiseService {
     }
 
     final state = await _peripheral.start(
-      advertiseData: AdvertiseDataCore(
-        serviceUuid: BleConstants.herpServiceUuid,
-      ),
+      advertiseData: Platform.isAndroid
+          ? AndroidAdvertiseData(
+              serviceUuid: BleConstants.herpServiceUuid,
+            )
+          : AdvertiseDataCore(
+              serviceUuid: BleConstants.herpServiceUuid,
+              localName: 'HERP',
+            ),
+      androidSettings: Platform.isAndroid
+          ? const AndroidAdvertiseSettings(
+              advertiseResponseData: AndroidAdvertiseData(
+                includeDeviceName: true,
+              ),
+            )
+          : null,
       gattServer: const GattServerSettings(),
     );
 

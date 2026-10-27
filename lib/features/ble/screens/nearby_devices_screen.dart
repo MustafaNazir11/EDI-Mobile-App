@@ -96,6 +96,7 @@ final Set<String> _relayingSosIds = {};
           'SOS received!\n'
           'ID: ${sos.id}\n'
           'Origin: ${sos.originDeviceId}\n'
+          'Hops: ${sos.hopCount}\n'
           'Latitude: ${sos.latitude ?? "Unavailable"}\n'
           'Longitude: ${sos.longitude ?? "Unavailable"}';
     });
@@ -238,6 +239,7 @@ Future<void> _forwardSos(SosMessage sos) async {
 
 Future<void> _sendTestMessage(ScanResult result) async {
   final deviceId = result.device.remoteId.str;
+  final deviceName = _deviceDisplayName(result);
 
   setState(() {
     _sendingDeviceId = deviceId;
@@ -266,7 +268,7 @@ Future<void> _sendTestMessage(ScanResult result) async {
     if (!mounted) return;
 
     setState(() {
-      _transferStatus = '$deviceId: $message';
+      _transferStatus = '$deviceName: $message';
     });
   } catch (error) {
     if (!mounted) return;
@@ -464,8 +466,7 @@ Future<void> _sendTestMessage(ScanResult result) async {
               ),
             ),
           ..._devices.values.map((result) {
-            final name = result.advertisementData.advName;
-            final displayName = name.isNotEmpty ? name : 'Unknown BLE device';
+            final displayName = _deviceDisplayName(result);
 
             return Card(
               child: ListTile(
@@ -485,5 +486,15 @@ Future<void> _sendTestMessage(ScanResult result) async {
         ],
       ),
     );
+  }
+
+  String _deviceDisplayName(ScanResult result) {
+    final advertisedName = result.advertisementData.advName.trim();
+    if (advertisedName.isNotEmpty) return advertisedName;
+
+    final platformName = result.device.platformName.trim();
+    if (platformName.isNotEmpty) return platformName;
+
+    return 'HERP phone (${result.device.remoteId.str})';
   }
 }

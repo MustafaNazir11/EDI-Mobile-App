@@ -9,56 +9,73 @@ import 'ble_constants.dart';
 import '../../features/sos/models/sos_message.dart';
 
 class BleConnectionService {
-  
-Future<String> sendSosMessage(
-  BluetoothDevice device,
-  SosMessage sos,
-) async {
-  var stage = 'connecting';
+  Future<String> sendSosMessage(
+    BluetoothDevice device,
+    SosMessage sos,
+  ) async {
+    var stage = 'connecting';
+    var connected = false;
+    String? transferError;
+    String? disconnectError;
 
-  try {
-    await device
-        .connect(
-          license: License.nonprofit,
-          timeout: const Duration(seconds: 20),
-        )
-        .timeout(const Duration(seconds: 25));
+    try {
+      await device
+          .connect(
+            license: License.nonprofit,
+            timeout: const Duration(seconds: 20),
+          )
+          .timeout(const Duration(seconds: 25));
+      connected = true;
 
-    stage = 'discovering HERP service';
+      stage = 'discovering HERP service';
 
-    final services = await device
-        .discoverServices()
-        .timeout(const Duration(seconds: 15));
+      final services = await device
+          .discoverServices()
+          .timeout(const Duration(seconds: 15));
 
-    final service = services.firstWhere(
-      (s) => s.uuid == Guid(BleConstants.herpServiceUuid),
-      orElse: () => throw Exception(
-        'HERP service not found on the receiving phone.',
-      ),
-    );
+      final service = services.firstWhere(
+        (s) => s.uuid == Guid(BleConstants.herpServiceUuid),
+        orElse: () => throw Exception(
+          'HERP service not found on the receiving phone.',
+        ),
+      );
 
-    stage = 'finding receive characteristic';
+      stage = 'finding receive characteristic';
 
-    final rxCharacteristic = service.characteristics.firstWhere(
-      (c) => c.uuid == Guid(defaultRxCharacteristicUuid),
-      orElse: () => throw Exception(
-        'HERP receive characteristic not found.',
-      ),
-    );
+      final rxCharacteristic = service.characteristics.firstWhere(
+        (c) => c.uuid == Guid(defaultRxCharacteristicUuid),
+        orElse: () => throw Exception(
+          'HERP receive characteristic not found.',
+        ),
+      );
 
-    stage = 'writing SOS';
+      stage = 'writing SOS';
 
-    final bytes = Uint8List.fromList(
-      utf8.encode(sos.encode()),
-    );
+      final bytes = Uint8List.fromList(utf8.encode(sos.encode()));
 
-    await rxCharacteristic
-        .write(bytes)
-        .timeout(const Duration(seconds: 15));
+      await rxCharacteristic
+          .write(bytes)
+          .timeout(const Duration(seconds: 15));
+    } catch (error) {
+      transferError = 'SOS failed while $stage: $error';
+    } finally {
+      if (connected) {
+        try {
+          await device.disconnect();
+        } catch (error) {
+          disconnectError = 'Could not disconnect from device: $error';
+        }
+      }
+    }
 
-    return 'SOS write completed. Remote receipt is not confirmed.';
-  } catch (e) {
-    return 'SOS failed while $stage: $e';
+    if (transferError != null) {
+      return disconnectError == null
+          ? transferError
+          : '$transferError; $disconnectError';
+    }
+
+    return disconnectError == null
+        ? 'SOS write completed. Remote receipt is not confirmed.'
+        : 'SOS write completed, but $disconnectError';
   }
-}
 }
